@@ -1,6 +1,6 @@
 {
         "dependencies": [
-                "openssl"
+                "blake3"
         ],
         "vcpkg-configuration": {
                 "overlay-ports": [
