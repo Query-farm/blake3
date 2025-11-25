@@ -26,7 +26,6 @@ struct Blake3State {
 
 template <class STATE_DATA_TYPE>
 struct Blake3Operation {
-
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.did_update = false;
@@ -48,7 +47,10 @@ struct Blake3Operation {
 		if (!state.did_update) {
 			state.did_update = true;
 		}
-		blake3_hasher_update(&state.hasher, a_data.GetDataUnsafe(), a_data.GetSize());
+		uint64_t size = a_data.GetSize();
+		// hash the record length as well to prevent length extension attacks
+		blake3_hasher_update(&state.hasher, &size, sizeof(uint64_t));
+		blake3_hasher_update(&state.hasher, a_data.GetDataUnsafe(), size);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -61,9 +63,7 @@ struct Blake3Operation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
-		D_ASSERT(!target.did_update);
-		memcpy(&target.hasher, &source.hasher, sizeof(blake3_hasher));
-		target.did_update = source.did_update;
+		throw InvalidInputException("Blake3 hash cannot be executed in parallel, you may need to supply an ordering.");
 	}
 
 	template <class T, class STATE>
@@ -80,14 +80,20 @@ struct Blake3Operation {
 };
 
 static void LoadInternal(ExtensionLoader &loader) {
-	auto agg_function =
+	auto agg_set = AggregateFunctionSet("blake3_hash");
+	auto agg_with_arg =
 	    AggregateFunction::UnaryAggregateDestructor<Blake3State, string_t, string_t, Blake3Operation<Blake3State>,
 	                                                AggregateDestructorType::LEGACY>(LogicalType::VARCHAR,
 	                                                                                 LogicalType::BLOB);
-	agg_function.name = "blake3_hash";
-	agg_function.combine = nullptr;
+	agg_with_arg.name = "blake3_hash";
+	agg_with_arg.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
+	agg_with_arg.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
-	loader.RegisterFunction(agg_function);
+	agg_set.AddFunction(agg_with_arg);
+
+	loader.RegisterFunction(agg_set);
+
+	//	loader.RegisterFunction(agg_with_arg);
 }
 
 void QuackExtension::Load(ExtensionLoader &loader) {
