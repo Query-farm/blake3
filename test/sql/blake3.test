@@ -1,0 +1,31 @@
+# name: test/sql/blake3.test
+# description: test blake3 extension
+# group: [sql]
+
+# Before we load the extension, this will fail
+statement error
+SELECT blake3_hash('test' order by 1);
+----
+Catalog Error: Scalar Function with name blake3_hash does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require blake3
+
+# Confirm the extension works
+query I
+SELECT to_hex(blake3_hash('hello world' order by 1));
+----
+4D70CA83D92FED8E3D510D612BD6F2D1E4675E2DAFD26E0960B71818D08C8B23
+
+statement ok
+CREATE TABLE test_data as (select * as v from range(10000));
+
+query I
+SELECT to_hex(blake3_hash(v::varchar order by v)) from test_data
+----
+96DACC49D55FF97375EE96443CC3CAB4062A06796A20B09165042C61CC30754C
+
+query I
+SELECT to_hex(blake3_hash(v::varchar order by v desc)) from test_data
+----
+5DC193976B04AB4A3772ECDC659AB3102AC3D575683BA570F72A0790478AD391

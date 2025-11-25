@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "quack_extension.hpp"
+#include "blake3_extension.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -63,7 +63,7 @@ struct Blake3Operation {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
-		throw InvalidInputException("Blake3 hash cannot be executed in parallel, you may need to supply an ordering.");
+		throw InvalidInputException("Blake3 hash requires an ordering, example: blake3_hash(data order by data");
 	}
 
 	template <class T, class STATE>
@@ -96,14 +96,14 @@ static void LoadInternal(ExtensionLoader &loader) {
 	//	loader.RegisterFunction(agg_with_arg);
 }
 
-void QuackExtension::Load(ExtensionLoader &loader) {
+void Blake3Extension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
-std::string QuackExtension::Name() {
-	return "quack";
+std::string Blake3Extension::Name() {
+	return "blake3";
 }
 
-std::string QuackExtension::Version() const {
+std::string Blake3Extension::Version() const {
 	return "";
 }
 
@@ -111,7 +111,7 @@ std::string QuackExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_CPP_EXTENSION_ENTRY(quack, loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(blake3, loader) {
 	duckdb::LoadInternal(loader);
 }
 }
