@@ -70,3 +70,82 @@ query I
 SELECT to_hex(blake3(v::hugeint order by v)) from (select * as v from range(5) as v);
 ----
 6D0123541F76022789E08AC8EFC5FD044863DB4DA405CAB4B6F03FE55E6F3488
+
+# Test scalar function blake3_hash
+query I
+SELECT to_hex(blake3_hash('hello world'));
+----
+4D70CA83D92FED8E3D510D612BD6F2D1E4675E2DAFD26E0960B71818D08C8B23
+
+# Test scalar function with integer
+query I
+SELECT to_hex(blake3_hash(42::BIGINT));
+----
+FAE624A6C2DCAA946EC81BBEE9D0EE5C298C00955D3F889057E7AC83ED2DD170
+
+# Verify scalar and aggregate produce same result for single value
+query I
+SELECT to_hex(blake3_hash('test')) = to_hex(blake3('test' order by 1));
+----
+true
+
+query I
+SELECT to_hex(blake3_hash(42::BIGINT)) = to_hex(blake3(v order by v)) from (select 42::BIGINT as v);
+----
+true
+
+# Test scalar function with multiple rows
+query I
+SELECT to_hex(blake3_hash(value)) FROM (VALUES ('hello'), ('world'), ('test')) t(value) ORDER BY value;
+----
+CC2104C68D62617FFB94126D6C6962B155ADD154B79D0B9DF047C2FD4333E537
+66C240B887DC3DE2A6FF8F00F7B1C578074FC93D9EDBD62A9936ADF6B41BD866
+036EA44F84D303E4009DDD1CE736A4EAB3D89F1F60244632C7B7971A4B064A24
+
+# Test scalar function with different numeric types
+query I
+SELECT to_hex(blake3_hash(5::TINYINT));
+----
+84CB40E74F0E856BB4BB91233E3CB74113533DCA78A74F36F59EDAA41895C946
+
+query I
+SELECT to_hex(blake3_hash(5::SMALLINT));
+----
+453043F36069AF9BB7CF06DF7A15A50726630917E334804F9983479FF2BC222B
+
+query I
+SELECT to_hex(blake3_hash(5::INTEGER));
+----
+E84248FB50D0833361D0417DF114B0B3B34408FFF97C39CD0DE963B09A9AEBB8
+
+query I
+SELECT to_hex(blake3_hash(5::UBIGINT));
+----
+7670A5A683B5119971841294A5291A339464BE45D612A0E0E083DC6B09DE86F3
+
+query I
+SELECT to_hex(blake3_hash(5.0::FLOAT));
+----
+EFBA868322A447847457F4B0C3FD02C6E74F444494F966FAEBEB4E293DED90FD
+
+query I
+SELECT to_hex(blake3_hash(5.0::DOUBLE));
+----
+2022B7B7B9B40DC6260440568DA16BE40F708EDAB5B64391EEC156DFE00C72F2
+
+query I
+SELECT to_hex(blake3_hash(5::HUGEINT));
+----
+FABD54CFBB0BE6D58FE15C6972CA56576E570053EE33A089C5F66699E8279229
+
+# Test scalar function with BLOB
+query I
+SELECT to_hex(blake3_hash('test'::BLOB));
+----
+66C240B887DC3DE2A6FF8F00F7B1C578074FC93D9EDBD62A9936ADF6B41BD866
+
+# Test scalar function with NULL
+query I
+SELECT blake3_hash(NULL);
+----
+NULL

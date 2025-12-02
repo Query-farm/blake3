@@ -135,6 +135,38 @@ struct Blake3Operation {
 	}
 };
 
+// Scalar function for variable-size types (VARCHAR, BLOB)
+static void Blake3ScalarFunctionWithSize(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+		blake3_hasher hasher;
+		blake3_hasher_init(&hasher);
+
+		uint64_t size = input.GetSize();
+		blake3_hasher_update(&hasher, &size, sizeof(uint64_t));
+		blake3_hasher_update(&hasher, input.GetDataUnsafe(), size);
+
+		char output[BLAKE3_OUT_LEN];
+		blake3_hasher_finalize(&hasher, reinterpret_cast<uint8_t *>(&output), BLAKE3_OUT_LEN);
+
+		return StringVector::AddStringOrBlob(result, reinterpret_cast<const char *>(&output), BLAKE3_OUT_LEN);
+	});
+}
+
+// Scalar function for fixed-size types
+template <typename CPP_TYPE>
+static void Blake3ScalarFunctionFixedSize(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<CPP_TYPE, string_t>(args.data[0], result, args.size(), [&](CPP_TYPE input) {
+		blake3_hasher hasher;
+		blake3_hasher_init(&hasher);
+		blake3_hasher_update(&hasher, &input, sizeof(CPP_TYPE));
+
+		char output[BLAKE3_OUT_LEN];
+		blake3_hasher_finalize(&hasher, reinterpret_cast<uint8_t *>(&output), BLAKE3_OUT_LEN);
+
+		return StringVector::AddStringOrBlob(result, reinterpret_cast<const char *>(&output), BLAKE3_OUT_LEN);
+	});
+}
+
 // Helper function to register a fixed-size type aggregate
 template <typename CPP_TYPE>
 static void RegisterFixedSizeType(AggregateFunctionSet &agg_set, const LogicalType &logical_type) {
@@ -144,6 +176,14 @@ static void RegisterFixedSizeType(AggregateFunctionSet &agg_set, const LogicalTy
 	agg_func.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
 	agg_func.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 	agg_set.AddFunction(agg_func);
+}
+
+// Helper function to register a fixed-size type scalar
+template <typename CPP_TYPE>
+static void RegisterFixedSizeScalar(ScalarFunctionSet &scalar_set, const LogicalType &logical_type) {
+	ScalarFunction scalar_func({logical_type}, LogicalType::BLOB, Blake3ScalarFunctionFixedSize<CPP_TYPE>);
+	scalar_func.name = "blake3_hash";
+	scalar_set.AddFunction(scalar_func);
 }
 
 // Helper function to register a variable-size type aggregate (VARCHAR, BLOB)
@@ -158,7 +198,15 @@ static void RegisterVariableSizeType(AggregateFunctionSet &agg_set, const Logica
 	agg_set.AddFunction(agg_func);
 }
 
+// Helper function to register a variable-size type scalar (VARCHAR, BLOB)
+static void RegisterVariableSizeScalar(ScalarFunctionSet &scalar_set, const LogicalType &logical_type) {
+	ScalarFunction scalar_func({logical_type}, LogicalType::BLOB, Blake3ScalarFunctionWithSize);
+	scalar_func.name = "blake3_hash";
+	scalar_set.AddFunction(scalar_func);
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
+	// Register aggregate functions
 	auto agg_set = AggregateFunctionSet("blake3");
 
 	// Variable-size types (include size prefix to prevent length extension attacks)
@@ -182,6 +230,31 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterFixedSizeType<double>(agg_set, LogicalType::DOUBLE);
 
 	loader.RegisterFunction(agg_set);
+
+	// Register scalar functions
+	auto scalar_set = ScalarFunctionSet("blake3_hash");
+
+	// Variable-size types (include size prefix to prevent length extension attacks)
+	RegisterVariableSizeScalar(scalar_set, LogicalType::VARCHAR);
+	RegisterVariableSizeScalar(scalar_set, LogicalType::BLOB);
+
+	// Fixed-size integer types
+	RegisterFixedSizeScalar<int8_t>(scalar_set, LogicalType::TINYINT);
+	RegisterFixedSizeScalar<int16_t>(scalar_set, LogicalType::SMALLINT);
+	RegisterFixedSizeScalar<int32_t>(scalar_set, LogicalType::INTEGER);
+	RegisterFixedSizeScalar<int64_t>(scalar_set, LogicalType::BIGINT);
+	RegisterFixedSizeScalar<uint8_t>(scalar_set, LogicalType::UTINYINT);
+	RegisterFixedSizeScalar<uint16_t>(scalar_set, LogicalType::USMALLINT);
+	RegisterFixedSizeScalar<uint32_t>(scalar_set, LogicalType::UINTEGER);
+	RegisterFixedSizeScalar<uint64_t>(scalar_set, LogicalType::UBIGINT);
+	RegisterFixedSizeScalar<hugeint_t>(scalar_set, LogicalType::HUGEINT);
+	RegisterFixedSizeScalar<uhugeint_t>(scalar_set, LogicalType::UHUGEINT);
+
+	// Fixed-size floating point types
+	RegisterFixedSizeScalar<float>(scalar_set, LogicalType::FLOAT);
+	RegisterFixedSizeScalar<double>(scalar_set, LogicalType::DOUBLE);
+
+	loader.RegisterFunction(scalar_set);
 }
 
 void Blake3Extension::Load(ExtensionLoader &loader) {
