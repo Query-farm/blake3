@@ -135,35 +135,53 @@ struct Blake3Operation {
 	}
 };
 
+// Helper function to register a fixed-size type aggregate
+template <typename CPP_TYPE>
+static void RegisterFixedSizeType(AggregateFunctionSet &agg_set, const LogicalType &logical_type) {
+	auto agg_func = AggregateFunction::UnaryAggregate<Blake3State, CPP_TYPE, string_t, Blake3Operation<Blake3State>>(
+	    logical_type, LogicalType::BLOB);
+	agg_func.name = "blake3";
+	agg_func.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
+	agg_func.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	agg_set.AddFunction(agg_func);
+}
+
+// Helper function to register a variable-size type aggregate (VARCHAR, BLOB)
+template <typename CPP_TYPE>
+static void RegisterVariableSizeType(AggregateFunctionSet &agg_set, const LogicalType &logical_type) {
+	auto agg_func =
+	    AggregateFunction::UnaryAggregate<Blake3State, CPP_TYPE, string_t, Blake3OperationWithSize<Blake3State>>(
+	        logical_type, LogicalType::BLOB);
+	agg_func.name = "blake3";
+	agg_func.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
+	agg_func.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	agg_set.AddFunction(agg_func);
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	auto agg_set = AggregateFunctionSet("blake3");
 
-	auto agg_varchar =
-	    AggregateFunction::UnaryAggregate<Blake3State, string_t, string_t, Blake3OperationWithSize<Blake3State>>(
-	        LogicalType::VARCHAR, LogicalType::BLOB);
-	agg_varchar.name = "blake3";
-	agg_varchar.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
-	agg_varchar.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
-	agg_set.AddFunction(agg_varchar);
+	// Variable-size types (include size prefix to prevent length extension attacks)
+	RegisterVariableSizeType<string_t>(agg_set, LogicalType::VARCHAR);
+	RegisterVariableSizeType<string_t>(agg_set, LogicalType::BLOB);
 
-	auto agg_blob =
-	    AggregateFunction::UnaryAggregate<Blake3State, string_t, string_t, Blake3OperationWithSize<Blake3State>>(
-	        LogicalType::BLOB, LogicalType::BLOB);
-	agg_blob.name = "blake3";
-	agg_blob.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
-	agg_blob.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
-	agg_set.AddFunction(agg_blob);
+	// Fixed-size integer types
+	RegisterFixedSizeType<int8_t>(agg_set, LogicalType::TINYINT);
+	RegisterFixedSizeType<int16_t>(agg_set, LogicalType::SMALLINT);
+	RegisterFixedSizeType<int32_t>(agg_set, LogicalType::INTEGER);
+	RegisterFixedSizeType<int64_t>(agg_set, LogicalType::BIGINT);
+	RegisterFixedSizeType<uint8_t>(agg_set, LogicalType::UTINYINT);
+	RegisterFixedSizeType<uint16_t>(agg_set, LogicalType::USMALLINT);
+	RegisterFixedSizeType<uint32_t>(agg_set, LogicalType::UINTEGER);
+	RegisterFixedSizeType<uint64_t>(agg_set, LogicalType::UBIGINT);
+	RegisterFixedSizeType<hugeint_t>(agg_set, LogicalType::HUGEINT);
+	RegisterFixedSizeType<uhugeint_t>(agg_set, LogicalType::UHUGEINT);
 
-	auto agg_bigint = AggregateFunction::UnaryAggregate<Blake3State, int64_t, string_t, Blake3Operation<Blake3State>>(
-	    LogicalType::BIGINT, LogicalType::BLOB);
-	agg_bigint.name = "blake3";
-	agg_bigint.order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
-	agg_bigint.distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
-	agg_set.AddFunction(agg_bigint);
+	// Fixed-size floating point types
+	RegisterFixedSizeType<float>(agg_set, LogicalType::FLOAT);
+	RegisterFixedSizeType<double>(agg_set, LogicalType::DOUBLE);
 
 	loader.RegisterFunction(agg_set);
-
-	//	loader.RegisterFunction(agg_with_arg);
 }
 
 void Blake3Extension::Load(ExtensionLoader &loader) {

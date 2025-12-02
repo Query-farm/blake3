@@ -32,5 +32,41 @@ SELECT to_hex(blake3(v::varchar order by v desc)) from test_data
 
 query I
 SELECT to_hex(blake3(v order by v desc)) from test_data;
+----
+E95B09A633851F4CDD612A6AC7DC7BE408C2D385A2F0579E1DF26D4E9270B43C
 
+# Test different numeric types
+query I
+SELECT to_hex(blake3(v::tinyint order by v)) from (select * as v from range(10) as v);
+----
+87FCF07CAC5BE3C91735B34E535C67286E4E7A63BF152D95F2CF4CD1A244758B
 
+query I
+SELECT to_hex(blake3(v::smallint order by v)) from (select * as v from range(10) as v);
+----
+406BA820BBB7D01B5959469B3A816FC97243AC6C4419F277BBAC8F76CF0582EE
+
+query I
+SELECT to_hex(blake3(v::integer order by v)) from (select * as v from range(10) as v);
+----
+9138FC91A15A05BD7120EA8ECC57B347BE0205E008DA0A9667C3F83564E6C399
+
+query I
+SELECT to_hex(blake3(v::ubigint order by v)) from (select * as v from range(10) as v);
+----
+B7EB265268D07380F973FD55964999122BE45F44D26E559FD0646FF9CB215461
+
+query I
+SELECT to_hex(blake3(v::float order by v)) from (select * as v from range(5) as v);
+----
+292A30693DEF5331FF8D046035A145AECE737F8AB2F9EE03D3A12BA46DE05800
+
+query I
+SELECT to_hex(blake3(v::double order by v)) from (select * as v from range(5) as v);
+----
+02A615BE32BCB46852128F4B30213631CC23C2C562BD688C4EB2BE524B97EEAC
+
+query I
+SELECT to_hex(blake3(v::hugeint order by v)) from (select * as v from range(5) as v);
+----
+6D0123541F76022789E08AC8EFC5FD044863DB4DA405CAB4B6F03FE55E6F3488
